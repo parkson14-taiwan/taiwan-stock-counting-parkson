@@ -155,6 +155,7 @@ def main() -> None:
     valid_returns = result["strategy_return"].replace(0, np.nan).dropna()
     win_rate = (valid_returns > 0).mean() if not valid_returns.empty else np.nan
     trades_count = (result["leverage_today"] != result["leverage_yesterday"]).sum()
+    equity_collapse_threshold = 0.01
 
     st.subheader("回測結果")
     col1, col2, col3, col4 = st.columns(4)
@@ -171,6 +172,30 @@ def main() -> None:
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend()
     st.pyplot(fig)
+
+    st.subheader("Equity 崩潰位置報告")
+    collapse_returns = result[result["strategy_return"] <= -1].copy()
+    collapse_equity = result[result["equity"] <= equity_collapse_threshold].copy()
+    if collapse_returns.empty and collapse_equity.empty:
+        st.write("沒有偵測到 Equity 崩潰或單日報酬 <= -100%。")
+    else:
+        st.caption(
+            f"當 equity <= {equity_collapse_threshold:.2f} 或單日報酬 <= -100% 視為崩潰。"
+        )
+        if not collapse_returns.empty:
+            st.write("單日報酬 <= -100% 的時間點")
+            st.dataframe(
+                collapse_returns[
+                    ["date", "close", "strategy_return", "leverage_today", "equity"]
+                ].reset_index(drop=True)
+            )
+        if not collapse_equity.empty:
+            st.write(f"Equity <= {equity_collapse_threshold:.2f} 的時間點")
+            st.dataframe(
+                collapse_equity[
+                    ["date", "close", "strategy_return", "leverage_today", "equity"]
+                ].reset_index(drop=True)
+            )
 
     st.subheader("觸發事件表")
     events = result[result["UP_EVENT"] | result["DOWN_EVENT"]].copy()
