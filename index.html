@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>台股策略回測工具</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>台股策略回測工具（純前端）</h1>
+      <p class="subtitle">資料來源：data/taiex.csv（同源讀取）</p>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>參數設定</h2>
+        <div class="form-grid">
+          <label>
+            MA10 週期
+            <input type="number" id="ma10" value="10" min="1" step="1" />
+          </label>
+          <label>
+            MA20 週期
+            <input type="number" id="ma20" value="20" min="1" step="1" />
+          </label>
+          <label>
+            季線 MA60 週期
+            <input type="number" id="ma60" value="60" min="1" step="1" />
+          </label>
+          <label>
+            X（UP & 季線上）
+            <input type="number" id="x" value="1" step="0.1" />
+          </label>
+          <label>
+            Y（DOWN & 季線上）
+            <input type="number" id="y" value="-1" step="0.1" />
+          </label>
+          <label>
+            A（UP & 季線下）
+            <input type="number" id="a" value="1" step="0.1" />
+          </label>
+          <label>
+            B（DOWN & 季線下）
+            <input type="number" id="b" value="-1" step="0.1" />
+          </label>
+          <label>
+            initial_leverage
+            <input type="number" id="initialLeverage" value="0" step="0.1" />
+          </label>
+          <label>
+            fee_rate
+            <input type="number" id="feeRate" value="0" step="0.0001" />
+          </label>
+          <label>
+            slippage_rate
+            <input type="number" id="slippageRate" value="0" step="0.0001" />
+          </label>
+          <label>
+            max_leverage（選填）
+            <input type="number" id="maxLeverage" placeholder="留空表示不限" step="0.1" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="runButton">Run Backtest</button>
+          <button id="downloadButton" disabled>Download Results CSV</button>
+        </div>
+        <p id="status" class="status">載入資料中…</p>
+      </section>
+
+      <section class="panel">
+        <h2>資料預覽（前 20 行）</h2>
+        <div class="table-wrapper">
+          <table id="previewTable">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>收盤</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>回測結果</h2>
+        <div class="metrics">
+          <div>
+            <span class="label">總報酬</span>
+            <strong id="totalReturn">—</strong>
+          </div>
+          <div>
+            <span class="label">最大回撤</span>
+            <strong id="maxDrawdown">—</strong>
+          </div>
+          <div>
+            <span class="label">勝率</span>
+            <strong id="winRate">—</strong>
+          </div>
+          <div>
+            <span class="label">交易次數</span>
+            <strong id="tradesCount">—</strong>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="equityCanvas" width="900" height="320"></canvas>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>觸發事件列表</h2>
+        <div class="table-wrapper">
+          <table id="eventsTable">
+            <thead>
+              <tr>
+                <th>Action Date（今天）</th>
+                <th>Event Date（昨天）</th>
+                <th>事件</th>
+                <th>季線狀態</th>
+                <th>更新後倍率</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>此工具為純前端頁面，可直接部署於 GitHub Pages。</p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
