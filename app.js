@@ -4,6 +4,7 @@ const statusEl = document.querySelector('#status');
 const runButton = document.querySelector('#runButton');
 const downloadButton = document.querySelector('#downloadButton');
 const equityCanvas = document.querySelector('#equityCanvas');
+const equityNearZeroTableBody = document.querySelector('#equityNearZeroTable tbody');
 
 const totalReturnEl = document.querySelector('#totalReturn');
 const maxDrawdownEl = document.querySelector('#maxDrawdown');
@@ -26,6 +27,7 @@ const inputs = {
 
 let rawData = [];
 let lastResult = null;
+const EQUITY_NEAR_ZERO_THRESHOLD = 0.05;
 
 const formatDate = (date) => {
   const year = date.getFullYear();
@@ -302,6 +304,53 @@ const renderEvents = (events) => {
   });
 };
 
+const computeEquityNearZeroEvents = (data, result, threshold) => {
+  const events = [];
+  const closeValues = data.map((row) => row.close);
+
+  for (let i = 0; i < result.equity.length; i += 1) {
+    const currentEquity = result.equity[i];
+    const wasAbove = i === 0 ? true : result.equity[i - 1] > threshold;
+    if (currentEquity <= threshold && wasAbove) {
+      const closeAt = closeValues[i];
+      const maxCloseAfter = Math.max(...closeValues.slice(i));
+      const risePoints = Math.max(0, maxCloseAfter - closeAt);
+      events.push({
+        date: data[i].date,
+        equity: currentEquity,
+        close: closeAt,
+        risePoints
+      });
+    }
+  }
+
+  return events;
+};
+
+const renderEquityNearZeroEvents = (events) => {
+  equityNearZeroTableBody.innerHTML = '';
+  if (events.length === 0) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 4;
+    cell.textContent = '尚未出現 Equity 接近 0 的時間點';
+    row.appendChild(cell);
+    equityNearZeroTableBody.appendChild(row);
+    return;
+  }
+
+  events.forEach((event) => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${formatDate(event.date)}</td>
+      <td>${event.equity.toFixed(4)}</td>
+      <td>${event.close.toFixed(2)}</td>
+      <td>${event.risePoints.toFixed(2)}</td>
+    `;
+    equityNearZeroTableBody.appendChild(row);
+  });
+};
+
 const drawEquityCurve = (dates, equity) => {
   const ctx = equityCanvas.getContext('2d');
   const width = equityCanvas.clientWidth;
@@ -401,9 +450,15 @@ const runBacktest = () => {
   if (!rawData.length) return;
   lastResult = backtest(rawData);
   const metrics = computeMetrics(lastResult);
+  const equityNearZeroEvents = computeEquityNearZeroEvents(
+    rawData,
+    lastResult,
+    EQUITY_NEAR_ZERO_THRESHOLD
+  );
 
   renderMetrics(metrics);
   renderEvents(lastResult.events);
+  renderEquityNearZeroEvents(equityNearZeroEvents);
   drawEquityCurve(
     rawData.map((row) => row.date),
     lastResult.equity
