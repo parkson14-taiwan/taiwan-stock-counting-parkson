@@ -15,6 +15,8 @@ const finalCapitalEl = document.querySelector('#finalCapital');
 const capitalStatusEl = document.querySelector('#capitalStatus');
 
 const inputs = {
+  startDate: document.querySelector('#startDate'),
+  endDate: document.querySelector('#endDate'),
   initialCapital: document.querySelector('#initialCapital'),
   ma10: document.querySelector('#ma10'),
   ma20: document.querySelector('#ma20'),
@@ -30,6 +32,7 @@ const inputs = {
 };
 
 let rawData = [];
+let lastData = [];
 let lastResult = null;
 const EQUITY_NEAR_ZERO_THRESHOLD = 0.05;
 
@@ -48,6 +51,22 @@ const parseDate = (value) => {
   if (!year || !month || !day) return null;
   return new Date(year, month - 1, day);
 };
+
+const parseDateInput = (value) => {
+  if (!value) return null;
+  const parts = value.split('-').map((part) => Number(part));
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts;
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const filterDataByDate = (data, startDate, endDate) =>
+  data.filter((row) => {
+    if (startDate && row.date < startDate) return false;
+    if (endDate && row.date > endDate) return false;
+    return true;
+  });
 
 const parseCsv = (text) => {
   const lines = text.trim().split(/\r?\n/);
@@ -480,14 +499,30 @@ const buildCsv = (data, result) => {
 
 const runBacktest = () => {
   if (!rawData.length) return;
-  lastResult = backtest(rawData);
+  const startDate = parseDateInput(inputs.startDate.value);
+  const endDate = parseDateInput(inputs.endDate.value);
+  if (startDate && endDate && startDate > endDate) {
+    statusEl.textContent = '回測區間錯誤：起始日不可晚於結束日。';
+    downloadButton.disabled = true;
+    return;
+  }
+
+  const filteredData = filterDataByDate(rawData, startDate, endDate);
+  if (filteredData.length < 2) {
+    statusEl.textContent = '回測區間內沒有足夠資料。';
+    downloadButton.disabled = true;
+    return;
+  }
+
+  lastData = filteredData;
+  lastResult = backtest(filteredData);
   const initialCapital = Math.max(
     0,
     parseInputNumber(inputs.initialCapital, 0)
   );
   const metrics = computeMetrics(lastResult, initialCapital);
   const equityNearZeroEvents = computeEquityNearZeroEvents(
-    rawData,
+    filteredData,
     lastResult,
     EQUITY_NEAR_ZERO_THRESHOLD
   );
@@ -496,16 +531,24 @@ const runBacktest = () => {
   renderEvents(lastResult.events);
   renderEquityNearZeroEvents(equityNearZeroEvents);
   drawEquityCurve(
-    rawData.map((row) => row.date),
+    filteredData.map((row) => row.date),
     lastResult.equity
   );
 
+  renderPreview(filteredData);
+  statusEl.textContent = `回測區間 ${
+    startDate ? formatDate(startDate) : formatDate(filteredData[0].date)
+  } ～ ${
+    endDate
+      ? formatDate(endDate)
+      : formatDate(filteredData[filteredData.length - 1].date)
+  }，共 ${filteredData.length} 筆。`;
   downloadButton.disabled = false;
 };
 
 const downloadResults = () => {
   if (!lastResult) return;
-  const csv = buildCsv(rawData, lastResult);
+  const csv = buildCsv(lastData, lastResult);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -540,6 +583,15 @@ const loadData = async () => {
     }
 
     rawData = cleaned;
+    lastData = cleaned;
+    const minDate = rawData[0].date;
+    const maxDate = rawData[rawData.length - 1].date;
+    inputs.startDate.min = formatDate(minDate);
+    inputs.startDate.max = formatDate(maxDate);
+    inputs.endDate.min = formatDate(minDate);
+    inputs.endDate.max = formatDate(maxDate);
+    inputs.startDate.value = inputs.startDate.value || formatDate(minDate);
+    inputs.endDate.value = inputs.endDate.value || formatDate(maxDate);
     renderPreview(rawData);
     statusEl.textContent = `資料載入完成，共 ${rawData.length} 筆。`;
   } catch (error) {
