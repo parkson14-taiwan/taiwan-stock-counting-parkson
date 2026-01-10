@@ -10,8 +10,12 @@ const totalReturnEl = document.querySelector('#totalReturn');
 const maxDrawdownEl = document.querySelector('#maxDrawdown');
 const winRateEl = document.querySelector('#winRate');
 const tradesCountEl = document.querySelector('#tradesCount');
+const totalPointsEl = document.querySelector('#totalPoints');
+const finalCapitalEl = document.querySelector('#finalCapital');
+const capitalStatusEl = document.querySelector('#capitalStatus');
 
 const inputs = {
+  initialCapital: document.querySelector('#initialCapital'),
   ma10: document.querySelector('#ma10'),
   ma20: document.querySelector('#ma20'),
   ma60: document.querySelector('#ma60'),
@@ -122,6 +126,19 @@ const parseInputNumber = (input, fallback = 0) => {
   return Number.isFinite(value) ? value : fallback;
 };
 
+const formatCurrency = (value) =>
+  new Intl.NumberFormat('zh-TW', {
+    style: 'currency',
+    currency: 'TWD',
+    maximumFractionDigits: 0
+  }).format(value);
+
+const formatNumber = (value) =>
+  new Intl.NumberFormat('zh-TW', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
+
 const backtest = (data) => {
   const ma10Period = Math.max(1, Math.floor(parseInputNumber(inputs.ma10, 10)));
   const ma20Period = Math.max(1, Math.floor(parseInputNumber(inputs.ma20, 20)));
@@ -147,6 +164,7 @@ const backtest = (data) => {
   const returns = new Array(data.length).fill(0);
   const strategyReturns = new Array(data.length).fill(0);
   const equity = new Array(data.length).fill(1);
+  const pointChanges = new Array(data.length).fill(0);
   const upEventYday = new Array(data.length).fill(false);
   const downEventYday = new Array(data.length).fill(false);
   const seasonUpYday = new Array(data.length).fill(false);
@@ -222,7 +240,10 @@ const backtest = (data) => {
     }
     strategyReturns[t] = strategyReturn;
     equity[t] = equity[t - 1] * (1 + strategyReturn);
+    pointChanges[t] = (closeValues[t] - closeValues[t - 1]) * leverage[t];
   }
+
+  const totalPoints = pointChanges.reduce((sum, value) => sum + value, 0);
 
   return {
     ma10,
@@ -232,6 +253,7 @@ const backtest = (data) => {
     returns,
     strategyReturns,
     equity,
+    totalPoints,
     upEventYday,
     downEventYday,
     seasonUpYday,
@@ -239,7 +261,7 @@ const backtest = (data) => {
   };
 };
 
-const computeMetrics = (result) => {
+const computeMetrics = (result, initialCapital) => {
   const equity = result.equity;
   const totalReturn = equity.length ? equity[equity.length - 1] - 1 : 0;
 
@@ -264,11 +286,18 @@ const computeMetrics = (result) => {
     }
   }
 
+  const finalEquity = equity.length ? equity[equity.length - 1] : 0;
+  const finalCapital = initialCapital * finalEquity;
+  const capitalStatus = finalCapital <= 0 ? '歸零' : '有剩餘';
+
   return {
     totalReturn,
     maxDrawdown,
     winRate,
-    tradesCount
+    tradesCount,
+    totalPoints: result.totalPoints,
+    finalCapital,
+    capitalStatus
   };
 };
 
@@ -277,6 +306,9 @@ const renderMetrics = (metrics) => {
   maxDrawdownEl.textContent = `${(metrics.maxDrawdown * 100).toFixed(2)}%`;
   winRateEl.textContent = `${(metrics.winRate * 100).toFixed(2)}%`;
   tradesCountEl.textContent = `${metrics.tradesCount}`;
+  totalPointsEl.textContent = formatNumber(metrics.totalPoints);
+  finalCapitalEl.textContent = formatCurrency(metrics.finalCapital);
+  capitalStatusEl.textContent = metrics.capitalStatus;
 };
 
 const renderEvents = (events) => {
@@ -449,7 +481,11 @@ const buildCsv = (data, result) => {
 const runBacktest = () => {
   if (!rawData.length) return;
   lastResult = backtest(rawData);
-  const metrics = computeMetrics(lastResult);
+  const initialCapital = Math.max(
+    0,
+    parseInputNumber(inputs.initialCapital, 0)
+  );
+  const metrics = computeMetrics(lastResult, initialCapital);
   const equityNearZeroEvents = computeEquityNearZeroEvents(
     rawData,
     lastResult,

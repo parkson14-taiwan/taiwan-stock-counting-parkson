@@ -17,6 +17,16 @@
         <h2>參數設定</h2>
         <div class="form-grid">
           <label>
+            初始資金
+            <input
+              type="number"
+              id="initialCapital"
+              value="1000000"
+              min="0"
+              step="10000"
+            />
+          </label>
+          <label>
             MA10 週期
             <input type="number" id="ma10" value="10" min="1" step="1" />
           </label>
@@ -101,6 +111,18 @@
           <div>
             <span class="label">交易次數</span>
             <strong id="tradesCount">—</strong>
+          </div>
+          <div>
+            <span class="label">總點數</span>
+            <strong id="totalPoints">—</strong>
+          </div>
+          <div>
+            <span class="label">複利後資金</span>
+            <strong id="finalCapital">—</strong>
+          </div>
+          <div>
+            <span class="label">資金狀態</span>
+            <strong id="capitalStatus">—</strong>
           </div>
         </div>
         <div class="chart-wrapper">
