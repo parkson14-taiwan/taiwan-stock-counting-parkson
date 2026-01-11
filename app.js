@@ -10,6 +10,7 @@ const totalReturnEl = document.querySelector('#totalReturn');
 const maxDrawdownEl = document.querySelector('#maxDrawdown');
 const winRateEl = document.querySelector('#winRate');
 const tradesCountEl = document.querySelector('#tradesCount');
+const latestLeverageEl = document.querySelector('#latestLeverage');
 const totalPointsEl = document.querySelector('#totalPoints');
 const finalCapitalEl = document.querySelector('#finalCapital');
 const capitalStatusEl = document.querySelector('#capitalStatus');
@@ -243,7 +244,9 @@ const backtest = (data) => {
           eventDate: data[t - 1].date,
           event: upEvent ? 'UP' : 'DOWN',
           season: seasonUp ? '季線上' : '季線下',
+          previousLeverage: leverage[t - 1],
           leverage: leverage[t],
+          leverageChange: leverage[t] - leverage[t - 1],
           pointChange
         });
       }
@@ -322,6 +325,7 @@ const computeMetrics = (result, initialCapital) => {
     maxDrawdown,
     winRate,
     tradesCount,
+    latestLeverage: result.leverage[result.leverage.length - 1] ?? 0,
     totalPoints: result.totalPoints,
     finalCapital,
     capitalStatus
@@ -333,6 +337,7 @@ const renderMetrics = (metrics) => {
   maxDrawdownEl.textContent = `${(metrics.maxDrawdown * 100).toFixed(2)}%`;
   winRateEl.textContent = `${(metrics.winRate * 100).toFixed(2)}%`;
   tradesCountEl.textContent = `${metrics.tradesCount}`;
+  latestLeverageEl.textContent = formatNumber(metrics.latestLeverage);
   totalPointsEl.textContent = formatNumber(metrics.totalPoints);
   finalCapitalEl.textContent = formatCurrency(metrics.finalCapital);
   capitalStatusEl.textContent = metrics.capitalStatus;
@@ -343,7 +348,7 @@ const renderEvents = (events) => {
   if (events.length === 0) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 6;
+    cell.colSpan = 8;
     cell.textContent = '沒有觸發事件';
     row.appendChild(cell);
     eventsTableBody.appendChild(row);
@@ -357,7 +362,9 @@ const renderEvents = (events) => {
       <td>${formatDate(event.eventDate)}</td>
       <td>${event.event}</td>
       <td>${event.season}</td>
-      <td>${event.leverage.toFixed(2)}</td>
+      <td>${formatNumber(event.previousLeverage)}</td>
+      <td>${formatNumber(event.leverage)}</td>
+      <td>${formatSignedNumber(event.leverageChange)}</td>
       <td>${formatSignedNumber(event.pointChange)}</td>
     `;
     eventsTableBody.appendChild(row);
