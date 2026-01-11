@@ -32,9 +32,8 @@ def compute_strategy(
     y: float,
     a: float,
     b: float,
-    initial_leverage: float,
-    fee_rate: float,
-    slippage_rate: float,
+    initial_capital: float,
+    contract_multiplier: float,
     max_leverage: float | None,
 ) -> pd.DataFrame:
     df = df.copy()
@@ -56,11 +55,19 @@ def compute_strategy(
     df["SEASON_UP"] = c1 >= ma60_1
     df["SEASON_DOWN"] = c1 < ma60_1
 
+    equity_values: list[float] = []
+    contracts_values: list[int] = []
     leverage_values: list[float] = []
-    previous_leverage = initial_leverage
+    strategy_returns: list[float] = []
+
     leverage_cap = abs(max_leverage) if max_leverage is not None else None
+    previous_equity = initial_capital
+    previous_close: float | None = None
+    previous_contracts = 0
+    previous_target_leverage = 0.0
 
     for _, row in df.iterrows():
+        contract_value = row["close"] * contract_multiplier
         target: float | None = None
         if row["UP_EVENT"] and row["SEASON_UP"]:
             target = x
@@ -71,29 +78,47 @@ def compute_strategy(
         elif row["DOWN_EVENT"] and row["SEASON_DOWN"]:
             target = b
 
-        leverage_today = previous_leverage
         if target is not None:
-            leverage_today = target
+            previous_target_leverage = target
+        target_leverage = previous_target_leverage
+        desired_contracts = int(np.floor((previous_equity * target_leverage) / contract_value))
 
         if leverage_cap is not None and leverage_cap > 0:
-            if abs(leverage_today) > leverage_cap:
-                leverage_today = np.sign(leverage_today) * leverage_cap
+            max_contracts = int(
+                np.floor((previous_equity * leverage_cap) / contract_value)
+            )
+            if abs(desired_contracts) > max_contracts:
+                desired_contracts = int(np.sign(desired_contracts) * max_contracts)
 
+        contracts_today = desired_contracts
+        if previous_close is None:
+            pnl = 0.0
+            equity_today = previous_equity
+            strategy_return = 0.0
+        else:
+            pnl = previous_contracts * (row["close"] - previous_close) * contract_multiplier
+            equity_today = previous_equity + pnl
+            strategy_return = (equity_today - previous_equity) / previous_equity
+
+        position_value = contracts_today * contract_value
+        leverage_today = 0.0 if equity_today == 0 else position_value / equity_today
+
+        equity_values.append(equity_today)
+        contracts_values.append(contracts_today)
         leverage_values.append(leverage_today)
-        previous_leverage = leverage_today
+        strategy_returns.append(strategy_return)
 
+        previous_equity = equity_today
+        previous_close = row["close"]
+        previous_contracts = contracts_today
+
+    df["contracts"] = contracts_values
     df["leverage_today"] = leverage_values
-    df["leverage_yesterday"] = df["leverage_today"].shift(1).fillna(initial_leverage)
-
-    df["return"] = df["close"].pct_change()
-    trade_cost = np.where(
-        df["leverage_today"] != df["leverage_yesterday"],
-        fee_rate + slippage_rate,
-        0.0,
+    df["leverage_yesterday"] = (
+        pd.Series(leverage_values, index=df.index).shift(1).fillna(0.0)
     )
-    df["strategy_return"] = df["return"] * df["leverage_today"] - trade_cost
-    df["strategy_return"] = df["strategy_return"].fillna(0)
-    df["equity"] = (1 + df["strategy_return"]).cumprod()
+    df["strategy_return"] = strategy_returns
+    df["equity"] = equity_values
 
     return df
 
@@ -118,13 +143,12 @@ def main() -> None:
         a = st.number_input("A (UP & 季線下)", value=1.0, step=0.1, format="%.2f")
         b = st.number_input("B (DOWN & 季線下)", value=-1.0, step=0.1, format="%.2f")
 
-        st.header("成本與槓桿")
-        initial_leverage = st.number_input(
-            "初始倍率", value=0.0, step=0.1, format="%.2f"
+        st.header("資金與槓桿")
+        initial_capital = st.number_input(
+            "初始資金", value=1_000_000.0, step=10_000.0, format="%.0f"
         )
-        fee_rate = st.number_input("手續費率", value=0.0, step=0.0001, format="%.4f")
-        slippage_rate = st.number_input(
-            "滑價率", value=0.0, step=0.0001, format="%.4f"
+        contract_multiplier = st.number_input(
+            "微台合約乘數", value=10.0, step=1.0, format="%.0f"
         )
         use_max_leverage = st.checkbox("限制最大槓桿")
         max_leverage = None
@@ -142,20 +166,21 @@ def main() -> None:
         y=y,
         a=a,
         b=b,
-        initial_leverage=initial_leverage,
-        fee_rate=fee_rate,
-        slippage_rate=slippage_rate,
+        initial_capital=initial_capital,
+        contract_multiplier=contract_multiplier,
         max_leverage=max_leverage,
     )
 
-    total_return = result["equity"].iloc[-1] - 1 if not result.empty else np.nan
+    total_return = (
+        result["equity"].iloc[-1] / initial_capital - 1 if not result.empty else np.nan
+    )
     running_max = result["equity"].cummax()
     drawdown = result["equity"] / running_max - 1
     max_drawdown = drawdown.min() if not drawdown.empty else np.nan
     valid_returns = result["strategy_return"].replace(0, np.nan).dropna()
     win_rate = (valid_returns > 0).mean() if not valid_returns.empty else np.nan
     trades_count = (result["leverage_today"] != result["leverage_yesterday"]).sum()
-    equity_collapse_threshold = 0.01
+    equity_collapse_threshold = initial_capital * 0.01
 
     st.subheader("回測結果")
     col1, col2, col3, col4 = st.columns(4)
@@ -215,6 +240,7 @@ def main() -> None:
         "ma5",
         "ma10",
         "ma60",
+        "contracts",
         "leverage_today",
         "strategy_return",
         "equity",
