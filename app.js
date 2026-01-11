@@ -18,8 +18,8 @@ const inputs = {
   startDate: document.querySelector('#startDate'),
   endDate: document.querySelector('#endDate'),
   initialCapital: document.querySelector('#initialCapital'),
+  ma5: document.querySelector('#ma5'),
   ma10: document.querySelector('#ma10'),
-  ma20: document.querySelector('#ma20'),
   ma60: document.querySelector('#ma60'),
   x: document.querySelector('#x'),
   y: document.querySelector('#y'),
@@ -165,8 +165,8 @@ const formatSignedNumber = (value) => {
 };
 
 const backtest = (data) => {
+  const ma5Period = Math.max(1, Math.floor(parseInputNumber(inputs.ma5, 5)));
   const ma10Period = Math.max(1, Math.floor(parseInputNumber(inputs.ma10, 10)));
-  const ma20Period = Math.max(1, Math.floor(parseInputNumber(inputs.ma20, 20)));
   const ma60Period = Math.max(1, Math.floor(parseInputNumber(inputs.ma60, 60)));
 
   const x = parseInputNumber(inputs.x, 1);
@@ -181,8 +181,8 @@ const backtest = (data) => {
   const maxLeverage = maxLeverageValue === '' ? null : Math.abs(Number(maxLeverageValue));
 
   const closeValues = data.map((row) => row.close);
+  const ma5 = rollingMean(closeValues, ma5Period);
   const ma10 = rollingMean(closeValues, ma10Period);
-  const ma20 = rollingMean(closeValues, ma20Period);
   const ma60 = rollingMean(closeValues, ma60Period);
 
   const leverage = new Array(data.length).fill(initialLeverage);
@@ -202,21 +202,21 @@ const backtest = (data) => {
   for (let t = 2; t < data.length; t += 1) {
     const c1 = closeValues[t - 1];
     const c2 = closeValues[t - 2];
+    const ma5_1 = ma5[t - 1];
+    const ma5_2 = ma5[t - 2];
     const ma10_1 = ma10[t - 1];
     const ma10_2 = ma10[t - 2];
-    const ma20_1 = ma20[t - 1];
-    const ma20_2 = ma20[t - 2];
     const ma60_1 = ma60[t - 1];
 
     if (
+      ma5_1 !== null &&
+      ma5_2 !== null &&
       ma10_1 !== null &&
       ma10_2 !== null &&
-      ma20_1 !== null &&
-      ma20_2 !== null &&
       ma60_1 !== null
     ) {
-      const upEvent = c2 <= ma10_2 && c2 <= ma20_2 && c1 >= ma10_1 && c1 >= ma20_1;
-      const downEvent = c2 >= ma10_2 && c2 >= ma20_2 && c1 <= ma10_1 && c1 <= ma20_1;
+      const upEvent = c2 <= ma5_2 && c2 <= ma10_2 && c1 >= ma5_1 && c1 >= ma10_1;
+      const downEvent = c2 >= ma5_2 && c2 >= ma10_2 && c1 <= ma5_1 && c1 <= ma10_1;
       const seasonUp = c1 >= ma60_1;
 
       upEventYday[t] = upEvent;
@@ -273,8 +273,8 @@ const backtest = (data) => {
   const totalPoints = pointChanges.reduce((sum, value) => sum + value, 0);
 
   return {
+    ma5,
     ma10,
-    ma20,
     ma60,
     leverage,
     returns,
@@ -473,8 +473,8 @@ const buildCsv = (data, result) => {
   const headers = [
     'date',
     'close',
+    'ma5',
     'ma10',
-    'ma20',
     'ma60',
     'leverage',
     'strategy_return',
@@ -490,8 +490,8 @@ const buildCsv = (data, result) => {
     const values = [
       formatDate(row.date),
       row.close.toFixed(4),
+      result.ma5[index] === null ? '' : result.ma5[index].toFixed(4),
       result.ma10[index] === null ? '' : result.ma10[index].toFixed(4),
-      result.ma20[index] === null ? '' : result.ma20[index].toFixed(4),
       result.ma60[index] === null ? '' : result.ma60[index].toFixed(4),
       result.leverage[index].toFixed(4),
       result.strategyReturns[index].toFixed(6),

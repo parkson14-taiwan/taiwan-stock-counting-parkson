@@ -25,8 +25,8 @@ def load_data() -> pd.DataFrame:
 
 def compute_strategy(
     df: pd.DataFrame,
+    ma5: int,
     ma10: int,
-    ma20: int,
     ma60: int,
     x: float,
     y: float,
@@ -38,20 +38,20 @@ def compute_strategy(
     max_leverage: float | None,
 ) -> pd.DataFrame:
     df = df.copy()
+    df["ma5"] = df["close"].rolling(window=ma5).mean()
     df["ma10"] = df["close"].rolling(window=ma10).mean()
-    df["ma20"] = df["close"].rolling(window=ma20).mean()
     df["ma60"] = df["close"].rolling(window=ma60).mean()
 
     c1 = df["close"].shift(1)
     c2 = df["close"].shift(2)
+    ma5_1 = df["ma5"].shift(1)
+    ma5_2 = df["ma5"].shift(2)
     ma10_1 = df["ma10"].shift(1)
     ma10_2 = df["ma10"].shift(2)
-    ma20_1 = df["ma20"].shift(1)
-    ma20_2 = df["ma20"].shift(2)
     ma60_1 = df["ma60"].shift(1)
 
-    df["UP_EVENT"] = (c2 <= ma10_2) & (c2 <= ma20_2) & (c1 >= ma10_1) & (c1 >= ma20_1)
-    df["DOWN_EVENT"] = (c2 >= ma10_2) & (c2 >= ma20_2) & (c1 <= ma10_1) & (c1 <= ma20_1)
+    df["UP_EVENT"] = (c2 <= ma5_2) & (c2 <= ma10_2) & (c1 >= ma5_1) & (c1 >= ma10_1)
+    df["DOWN_EVENT"] = (c2 >= ma5_2) & (c2 >= ma10_2) & (c1 <= ma5_1) & (c1 <= ma10_1)
 
     df["SEASON_UP"] = c1 >= ma60_1
     df["SEASON_DOWN"] = c1 < ma60_1
@@ -108,8 +108,8 @@ def main() -> None:
 
     with st.sidebar:
         st.header("均線參數")
+        ma5 = st.number_input("MA5 週期", min_value=1, value=5, step=1)
         ma10 = st.number_input("MA10 週期", min_value=1, value=10, step=1)
-        ma20 = st.number_input("MA20 週期", min_value=1, value=20, step=1)
         ma60 = st.number_input("MA60 週期", min_value=1, value=60, step=1)
 
         st.header("策略倍率")
@@ -135,8 +135,8 @@ def main() -> None:
 
     result = compute_strategy(
         df,
+        ma5=ma5,
         ma10=ma10,
-        ma20=ma20,
         ma60=ma60,
         x=x,
         y=y,
@@ -212,8 +212,8 @@ def main() -> None:
     output_cols = [
         "date",
         "close",
+        "ma5",
         "ma10",
-        "ma20",
         "ma60",
         "leverage_today",
         "strategy_return",
