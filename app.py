@@ -78,19 +78,6 @@ def compute_strategy(
         elif row["DOWN_EVENT"] and row["SEASON_DOWN"]:
             target = b
 
-        if target is not None:
-            previous_target_leverage = target
-        target_leverage = previous_target_leverage
-        desired_contracts = int(np.floor((previous_equity * target_leverage) / contract_value))
-
-        if leverage_cap is not None and leverage_cap > 0:
-            max_contracts = int(
-                np.floor((previous_equity * leverage_cap) / contract_value)
-            )
-            if abs(desired_contracts) > max_contracts:
-                desired_contracts = int(np.sign(desired_contracts) * max_contracts)
-
-        contracts_today = desired_contracts
         if previous_close is None:
             pnl = 0.0
             equity_today = previous_equity
@@ -98,7 +85,32 @@ def compute_strategy(
         else:
             pnl = previous_contracts * (row["close"] - previous_close) * contract_multiplier
             equity_today = previous_equity + pnl
-            strategy_return = (equity_today - previous_equity) / previous_equity
+            strategy_return = (
+                0.0 if previous_equity == 0 else (equity_today - previous_equity) / previous_equity
+            )
+
+        if target is not None:
+            previous_target_leverage = target
+        target_leverage = previous_target_leverage
+
+        if contract_value == 0:
+            desired_contracts = 0
+        else:
+            desired_contracts = int(
+                np.floor((equity_today * target_leverage) / contract_value)
+            )
+
+        if leverage_cap is not None and leverage_cap > 0:
+            if contract_value == 0:
+                max_contracts = 0
+            else:
+                max_contracts = int(
+                    np.floor((equity_today * leverage_cap) / contract_value)
+                )
+            if abs(desired_contracts) > max_contracts:
+                desired_contracts = int(np.sign(desired_contracts) * max_contracts)
+
+        contracts_today = desired_contracts
 
         position_value = contracts_today * contract_value
         leverage_today = 0.0 if equity_today == 0 else position_value / equity_today
@@ -144,11 +156,21 @@ def main() -> None:
         b = st.number_input("B (DOWN & 季線下)", value=-1.0, step=0.1, format="%.2f")
 
         st.header("資金與槓桿")
-        initial_capital = st.number_input(
-            "初始資金", value=1_000_000.0, step=10_000.0, format="%.0f"
+        initial_capital = 1_000_000.0
+        contract_multiplier = 10.0
+        st.number_input(
+            "初始資金",
+            value=initial_capital,
+            step=10_000.0,
+            format="%.0f",
+            disabled=True,
         )
-        contract_multiplier = st.number_input(
-            "微台合約乘數", value=10.0, step=1.0, format="%.0f"
+        st.number_input(
+            "微台合約乘數",
+            value=contract_multiplier,
+            step=1.0,
+            format="%.0f",
+            disabled=True,
         )
         use_max_leverage = st.checkbox("限制最大槓桿")
         max_leverage = None
@@ -197,6 +219,11 @@ def main() -> None:
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend()
     st.pyplot(fig)
+
+    st.subheader("每日口數 / 權益 / 槓桿")
+    st.dataframe(
+        result[["date", "contracts", "equity", "leverage_today"]].reset_index(drop=True)
+    )
 
     st.subheader("Equity 崩潰位置報告")
     collapse_returns = result[result["strategy_return"] <= -1].copy()
