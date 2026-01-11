@@ -158,6 +158,12 @@ const formatNumber = (value) =>
     maximumFractionDigits: 2
   }).format(value);
 
+const formatSignedNumber = (value) => {
+  if (value === 0) return formatNumber(0);
+  const sign = value > 0 ? '+' : '-';
+  return `${sign}${formatNumber(Math.abs(value))}`;
+};
+
 const backtest = (data) => {
   const ma10Period = Math.max(1, Math.floor(parseInputNumber(inputs.ma10, 10)));
   const ma20Period = Math.max(1, Math.floor(parseInputNumber(inputs.ma20, 20)));
@@ -231,12 +237,14 @@ const backtest = (data) => {
       leverage[t] = leverage[t - 1];
       if (target !== null) {
         leverage[t] = target;
+        const pointChange = closeValues[t] - closeValues[t - 1];
         events.push({
           actionDate: data[t].date,
           eventDate: data[t - 1].date,
           event: upEvent ? 'UP' : 'DOWN',
           season: seasonUp ? '季線上' : '季線下',
-          leverage: leverage[t]
+          leverage: leverage[t],
+          pointChange
         });
       }
     } else {
@@ -335,7 +343,7 @@ const renderEvents = (events) => {
   if (events.length === 0) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 5;
+    cell.colSpan = 6;
     cell.textContent = '沒有觸發事件';
     row.appendChild(cell);
     eventsTableBody.appendChild(row);
@@ -350,6 +358,7 @@ const renderEvents = (events) => {
       <td>${event.event}</td>
       <td>${event.season}</td>
       <td>${event.leverage.toFixed(2)}</td>
+      <td>${formatSignedNumber(event.pointChange)}</td>
     `;
     eventsTableBody.appendChild(row);
   });
